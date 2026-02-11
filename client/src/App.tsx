@@ -10,6 +10,7 @@ import Medications from "./pages/Medications";
 import MedicationLogs from "./pages/MedicationLogs";
 import Family from "./pages/Family";
 import Notifications from "./pages/Notifications";
+import EmailSettings from "./pages/EmailSettings";
 
 function Router() {
   return (
@@ -20,6 +21,7 @@ function Router() {
         <Route path={"/logs"} component={MedicationLogs} />
         <Route path={"/family"} component={Family} />
         <Route path={"/notifications"} component={Notifications} />
+        <Route path={"/email-settings"} component={EmailSettings} />
         <Route path={"/404"} component={NotFound} />
         <Route component={NotFound} />
       </Switch>

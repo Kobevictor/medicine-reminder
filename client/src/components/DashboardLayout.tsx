@@ -30,6 +30,7 @@ import {
   LogOut,
   PanelLeft,
   Heart,
+  Mail,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -42,6 +43,7 @@ const menuItems = [
   { icon: ClipboardList, label: "服药记录", path: "/logs" },
   { icon: Users, label: "亲友管理", path: "/family" },
   { icon: Bell, label: "消息通知", path: "/notifications" },
+  { icon: Mail, label: "邮件设置", path: "/email-settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";

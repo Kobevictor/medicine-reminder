@@ -6,6 +6,7 @@ import {
   medicationLogs, InsertMedicationLog,
   familyContacts, InsertFamilyContact,
   notifications, InsertNotification,
+  emailSettings, InsertEmailSetting,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -241,4 +242,32 @@ export async function getAllMedicationsWithPrediction(userId: number) {
       : null;
     return { ...med, daysRemaining, predictedExhaustDate, dailyUsage };
   });
+}
+
+// ─── Email Settings Queries ─────────────────────────────────────
+export async function getEmailSettings(userId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(emailSettings)
+    .where(eq(emailSettings.userId, userId))
+    .limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function upsertEmailSettings(userId: number, data: Omit<InsertEmailSetting, "userId" | "id">) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const existing = await getEmailSettings(userId);
+  if (existing) {
+    await db.update(emailSettings).set(data)
+      .where(eq(emailSettings.userId, userId));
+  } else {
+    await db.insert(emailSettings).values({ ...data, userId });
+  }
+}
+
+export async function deleteEmailSettings(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.delete(emailSettings).where(eq(emailSettings.userId, userId));
 }

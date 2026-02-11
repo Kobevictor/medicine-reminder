@@ -98,3 +98,24 @@ export const notifications = mysqlTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = typeof notifications.$inferInsert;
+
+/**
+ * User email settings - stores per-user SMTP configuration
+ * Each user can configure their own SMTP server for sending email notifications
+ */
+export const emailSettings = mysqlTable("email_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(), // one config per user
+  smtpHost: varchar("smtpHost", { length: 200 }).notNull(),
+  smtpPort: int("smtpPort").notNull().default(465),
+  smtpUser: varchar("smtpUser", { length: 320 }).notNull(),
+  smtpPass: varchar("smtpPass", { length: 500 }).notNull(), // encrypted in production
+  smtpFrom: varchar("smtpFrom", { length: 320 }), // optional, defaults to smtpUser
+  smtpSecure: boolean("smtpSecure").notNull().default(true), // true for SSL (465), false for TLS (587)
+  isEnabled: boolean("isEnabled").notNull().default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type EmailSetting = typeof emailSettings.$inferSelect;
+export type InsertEmailSetting = typeof emailSettings.$inferInsert;

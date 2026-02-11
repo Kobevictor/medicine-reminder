@@ -15,6 +15,8 @@ import {
 import { transcribeAudio } from "./_core/voiceTranscription";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import { sendLowStockEmail, sendTestEmailWithConfig, sendTestEmailFromDb, type LowStockMedInfo } from "./email";
+import { getEmailSettings, upsertEmailSettings, deleteEmailSettings } from "./db";
 
 export const appRouter = router({
   system: systemRouter,
@@ -224,15 +226,95 @@ export const appRouter = router({
         return { success: true };
       }),
 
-    // Check and send low stock notifications to family contacts
+    // Get user's SMTP configuration from database
+    smtpStatus: protectedProcedure.query(async ({ ctx }) => {
+      const settings = await getEmailSettings(ctx.user.id);
+      if (!settings) {
+        return { configured: false, host: null, from: null, isEnabled: false };
+      }
+      return {
+        configured: true,
+        host: `${settings.smtpHost}:${settings.smtpPort}`,
+        from: settings.smtpFrom || settings.smtpUser,
+        isEnabled: settings.isEnabled,
+        smtpHost: settings.smtpHost,
+        smtpPort: settings.smtpPort,
+        smtpUser: settings.smtpUser,
+        smtpSecure: settings.smtpSecure,
+        smtpFrom: settings.smtpFrom,
+      };
+    }),
+
+    // Save SMTP configuration to database
+    saveSmtpConfig: protectedProcedure
+      .input(z.object({
+        smtpHost: z.string().min(1, "请输入SMTP服务器地址"),
+        smtpPort: z.number().min(1).max(65535).default(465),
+        smtpUser: z.string().min(1, "请输入SMTP用户名"),
+        smtpPass: z.string().min(1, "请输入SMTP密码/授权码"),
+        smtpFrom: z.string().optional(),
+        smtpSecure: z.boolean().default(true),
+        isEnabled: z.boolean().default(true),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await upsertEmailSettings(ctx.user.id, input);
+        return { success: true };
+      }),
+
+    // Delete SMTP configuration
+    deleteSmtpConfig: protectedProcedure.mutation(async ({ ctx }) => {
+      await deleteEmailSettings(ctx.user.id);
+      return { success: true };
+    }),
+
+    // Test SMTP config before saving (uses raw config, not from DB)
+    testSmtpConfig: protectedProcedure
+      .input(z.object({
+        smtpHost: z.string().min(1),
+        smtpPort: z.number().min(1).max(65535),
+        smtpUser: z.string().min(1),
+        smtpPass: z.string().min(1),
+        smtpSecure: z.boolean(),
+        smtpFrom: z.string().optional(),
+        testEmail: z.string().email("请输入有效的测试邮箱地址"),
+      }))
+      .mutation(async ({ input }) => {
+        const { testEmail, ...config } = input;
+        const ok = await sendTestEmailWithConfig(config, testEmail);
+        if (!ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "邮件发送失败，请检查SMTP配置是否正确",
+          });
+        }
+        return { success: true };
+      }),
+
+    // Send a test email using saved DB config
+    sendTestEmail: protectedProcedure
+      .input(z.object({ email: z.string().email("请输入有效的邮箱地址") }))
+      .mutation(async ({ ctx, input }) => {
+        const ok = await sendTestEmailFromDb(ctx.user.id, input.email);
+        if (!ok) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "邮件发送失败，请检查SMTP配置是否正确",
+          });
+        }
+        return { success: true };
+      }),
+
+    // Check and send low stock notifications + emails to family contacts
     checkAndNotify: protectedProcedure.mutation(async ({ ctx }) => {
       const lowStockMeds = await getLowStockMedications(ctx.user.id, 7);
       const contacts = await getUserFamilyContacts(ctx.user.id);
       const notifyContacts = contacts.filter(c => c.notifyOnLowStock);
 
       let notificationsSent = 0;
+      let emailsSent = 0;
+
       for (const med of lowStockMeds) {
-        // Notify user
+        // Notify user (in-app)
         await createNotification({
           userId: ctx.user.id,
           medicationId: med.id,
@@ -245,7 +327,7 @@ export const appRouter = router({
         });
         notificationsSent++;
 
-        // Notify family contacts
+        // Notify family contacts (in-app)
         for (const contact of notifyContacts) {
           await createNotification({
             userId: ctx.user.id,
@@ -261,7 +343,31 @@ export const appRouter = router({
           notificationsSent++;
         }
       }
-      return { notificationsSent, lowStockCount: lowStockMeds.length };
+
+      // Send email notifications to family contacts (batch per contact)
+      if (lowStockMeds.length > 0 && notifyContacts.length > 0) {
+        const medInfos: LowStockMedInfo[] = lowStockMeds.map(med => ({
+          name: med.name,
+          dosage: med.dosage,
+          remainingQuantity: med.remainingQuantity,
+          daysRemaining: med.daysRemaining,
+          predictedExhaustDate: med.predictedExhaustDate.toLocaleDateString('zh-CN'),
+          dailyUsage: med.dailyUsage,
+        }));
+
+        for (const contact of notifyContacts) {
+          const sent = await sendLowStockEmail({
+            userId: ctx.user.id,
+            recipientName: contact.contactName,
+            recipientEmail: contact.contactEmail,
+            userName: ctx.user.name || "用户",
+            medications: medInfos,
+          });
+          if (sent) emailsSent++;
+        }
+      }
+
+      return { notificationsSent, emailsSent, lowStockCount: lowStockMeds.length };
     }),
   }),
 
