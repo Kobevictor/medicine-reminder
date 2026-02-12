@@ -11,21 +11,27 @@ import MedicationLogs from "./pages/MedicationLogs";
 import Family from "./pages/Family";
 import Notifications from "./pages/Notifications";
 import EmailSettings from "./pages/EmailSettings";
+import Login from "./pages/Login";
 
 function Router() {
   return (
-    <DashboardLayout>
-      <Switch>
-        <Route path={"/"} component={Home} />
-        <Route path={"/medications"} component={Medications} />
-        <Route path={"/logs"} component={MedicationLogs} />
-        <Route path={"/family"} component={Family} />
-        <Route path={"/notifications"} component={Notifications} />
-        <Route path={"/email-settings"} component={EmailSettings} />
-        <Route path={"/404"} component={NotFound} />
-        <Route component={NotFound} />
-      </Switch>
-    </DashboardLayout>
+    <Switch>
+      <Route path={"/login"} component={Login} />
+      <Route>
+        <DashboardLayout>
+          <Switch>
+            <Route path={"/"} component={Home} />
+            <Route path={"/medications"} component={Medications} />
+            <Route path={"/logs"} component={MedicationLogs} />
+            <Route path={"/family"} component={Family} />
+            <Route path={"/notifications"} component={Notifications} />
+            <Route path={"/email-settings"} component={EmailSettings} />
+            <Route path={"/404"} component={NotFound} />
+            <Route component={NotFound} />
+          </Switch>
+        </DashboardLayout>
+      </Route>
+    </Switch>
   );
 }
 

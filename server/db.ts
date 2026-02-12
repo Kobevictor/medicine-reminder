@@ -9,6 +9,7 @@ import {
   emailSettings, InsertEmailSetting,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import * as bcrypt from 'bcryptjs';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
@@ -25,58 +26,79 @@ export async function getDb() {
 }
 
 // ─── User Queries ────────────────────────────────────────────────
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
+
+/**
+ * Create a new user with hashed password
+ */
+export async function createUser(data: {
+  username: string;
+  password: string;
+  name?: string | null;
+  email?: string | null;
+}): Promise<number> {
   const db = await getDb();
-  if (!db) {
-    console.warn("[Database] Cannot upsert user: database not available");
-    return;
+  if (!db) throw new Error("Database not available");
+
+  // Check if username already exists
+  const existing = await db.select().from(users).where(eq(users.username, data.username)).limit(1);
+  if (existing.length > 0) {
+    throw new Error("Username already exists");
   }
-  try {
-    const values: InsertUser = { openId: user.openId };
-    const updateSet: Record<string, unknown> = {};
-    const textFields = ["name", "email", "loginMethod"] as const;
-    type TextField = (typeof textFields)[number];
-    const assignNullable = (field: TextField) => {
-      const value = user[field];
-      if (value === undefined) return;
-      const normalized = value ?? null;
-      values[field] = normalized;
-      updateSet[field] = normalized;
-    };
-    textFields.forEach(assignNullable);
-    if (user.lastSignedIn !== undefined) {
-      values.lastSignedIn = user.lastSignedIn;
-      updateSet.lastSignedIn = user.lastSignedIn;
-    }
-    if (user.role !== undefined) {
-      values.role = user.role;
-      updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
-    }
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
-  } catch (error) {
-    console.error("[Database] Failed to upsert user:", error);
-    throw error;
-  }
+
+  // Hash password
+  const hashedPassword = await bcrypt.hash(data.password, 10);
+
+  const result = await db.insert(users).values({
+    username: data.username,
+    password: hashedPassword,
+    name: data.name || null,
+    email: data.email || null,
+    lastSignedIn: new Date(),
+  });
+
+  return result[0].insertId;
 }
 
-export async function getUserByOpenId(openId: string) {
+/**
+ * Authenticate user with username and password
+ */
+export async function authenticateUser(
+  username: string,
+  password: string
+) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+  if (result.length === 0) return null;
+
+  const user = result[0];
+  const isValid = await bcrypt.compare(password, user.password);
+  if (!isValid) return null;
+
+  return user;
+}
+
+/**
+ * Get user by ID
+ */
+export async function getUserById(userId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
+
+/**
+ * Update user's last sign in time
+ */
+export async function updateUserLastSignIn(userId: number, lastSignedIn: Date) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(users).set({ lastSignedIn }).where(eq(users.id, userId));
+}
+
+
 
 // ─── Medication Queries ──────────────────────────────────────────
 export async function createMedication(data: InsertMedication) {

@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # MySQL数据库服务
+  db:
+    image: mysql:8.0
+    container_name: medicine-reminder-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-medicine_reminder}
+      MYSQL_USER: ${MYSQL_USER:-medicine_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-medicine_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./drizzle:/docker-entrypoint-initdb.d
+    ports:
+      - "3306:3306"
+    networks:
+      - medicine-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 应用服务
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medicine-reminder-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: mysql://${MYSQL_USER:-medicine_user}:${MYSQL_PASSWORD:-medicine_password}@db:3306/${MYSQL_DATABASE:-medicine_reminder}
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this-in-production}
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - medicine-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  medicine-network:
+    driver: bridge
