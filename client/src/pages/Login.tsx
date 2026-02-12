@@ -1,12 +1,15 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 export default function Login() {
+  const [, setLocation] = useLocation();
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     username: "",
@@ -15,32 +18,34 @@ export default function Login() {
     name: "",
     email: "",
   });
-  const [loading, setLoading] = useState(false);
+
+  const utils = trpc.useUtils();
+
+  const loginMutation = trpc.auth.login.useMutation({
+    onSuccess: () => {
+      toast.success("登录成功");
+      utils.auth.me.invalidate();
+      setLocation("/");
+    },
+    onError: (error) => {
+      toast.error(error.message || "登录失败");
+    },
+  });
+
+  const registerMutation = trpc.auth.register.useMutation({
+    onSuccess: () => {
+      toast.success("注册成功");
+      utils.auth.me.invalidate();
+      setLocation("/");
+    },
+    onError: (error) => {
+      toast.error(error.message || "注册失败");
+    },
+  });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(loginForm),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("登录成功");
-        window.location.href = "/";
-      } else {
-        toast.error(data.error || "登录失败");
-      }
-    } catch (error) {
-      toast.error("登录失败，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
+    loginMutation.mutate(loginForm);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -56,34 +61,15 @@ export default function Login() {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username: registerForm.username,
-          password: registerForm.password,
-          name: registerForm.name,
-          email: registerForm.email,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        toast.success("注册成功");
-        window.location.href = "/";
-      } else {
-        toast.error(data.error || "注册失败");
-      }
-    } catch (error) {
-      toast.error("注册失败，请稍后重试");
-    } finally {
-      setLoading(false);
-    }
+    registerMutation.mutate({
+      username: registerForm.username,
+      password: registerForm.password,
+      name: registerForm.name || undefined,
+      email: registerForm.email || undefined,
+    });
   };
+
+  const loading = loginMutation.isPending || registerMutation.isPending;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
