@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # MySQL数据库服务
   db:
@@ -13,9 +11,9 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-medicine_password}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./drizzle:/docker-entrypoint-initdb.d
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "3306:3306"
+      - "${DB_PORT:-3306}:3306"
     networks:
       - medicine-network
     healthcheck:
@@ -23,6 +21,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
 
   # 应用服务
   app:
@@ -34,10 +33,10 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: mysql://${MYSQL_USER:-medicine_user}:${MYSQL_PASSWORD:-medicine_password}@db:3306/${MYSQL_DATABASE:-medicine_reminder}
-      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-this-in-production}
+      JWT_SECRET: ${JWT_SECRET:-please-change-this-secret-key}
       PORT: 3000
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     depends_on:
       db:
         condition: service_healthy
