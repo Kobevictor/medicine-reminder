@@ -35,6 +35,41 @@ export const appRouter = router({
       return getAllMedicationsWithPrediction(ctx.user.id);
     }),
 
+    /**
+     * 获取当前需要提醒的药物列表
+     * 返回在当前时间 ±2 分钟窗口内且今天尚未服用的药物
+     */
+    dueReminders: protectedProcedure.query(async ({ ctx }) => {
+      const meds = await getUserMedications(ctx.user.id);
+      const logs = await getTodayLogs(ctx.user.id);
+
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      const dueItems: Array<{ medId: number; medName: string; dosage: string; time: string }> = [];
+
+      for (const med of meds) {
+        if (!med.isActive) continue;
+        let times: string[] = [];
+        try { times = JSON.parse(med.reminderTimes || "[]"); } catch { continue; }
+
+        for (const time of times) {
+          const taken = logs.some(l => l.medicationId === med.id && l.scheduledTime === time);
+          if (taken) continue;
+
+          const [h, m] = time.split(":").map(Number);
+          const targetMinutes = h * 60 + m;
+          const diff = currentMinutes - targetMinutes;
+
+          if (diff >= 0 && diff <= 2) {
+            dueItems.push({ medId: med.id, medName: med.name, dosage: med.dosage, time });
+          }
+        }
+      }
+
+      return dueItems;
+    }),
+
     getById: protectedProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ ctx, input }) => {

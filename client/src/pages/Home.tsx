@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import NotificationBanner from "@/components/NotificationBanner";
+import TestNotificationButton from "@/components/TestNotificationButton";
+import { useMedicationReminder } from "@/hooks/useMedicationReminder";
 import {
   Pill,
   Clock,
@@ -23,6 +26,7 @@ import { useMemo } from "react";
 export default function Home() {
   const { user } = useAuth();
   const [, setLocation] = useLocation();
+  const { permissionState, requestPermission, isSupported } = useMedicationReminder();
 
   const { data: medications, isLoading: medsLoading } =
     trpc.medication.list.useQuery();
@@ -123,15 +127,29 @@ export default function Home() {
             })}
           </p>
         </div>
-        <Button
-          size="lg"
-          className="text-lg py-6 px-6 rounded-xl bg-primary hover:bg-navy-light"
-          onClick={() => setLocation("/medications")}
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          添加药物
-        </Button>
+        <div className="flex gap-3">
+          <TestNotificationButton
+            permissionState={permissionState}
+            isSupported={isSupported}
+            onRequestPermission={requestPermission}
+          />
+          <Button
+            size="lg"
+            className="text-lg py-6 px-6 rounded-xl bg-primary hover:bg-navy-light"
+            onClick={() => setLocation("/medications")}
+          >
+            <Plus className="w-5 h-5 mr-2" />
+            添加药物
+          </Button>
+        </div>
       </div>
+
+      {/* Notification permission banner */}
+      <NotificationBanner
+        permissionState={permissionState}
+        isSupported={isSupported}
+        onRequestPermission={requestPermission}
+      />
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
