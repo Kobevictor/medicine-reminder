@@ -7,7 +7,6 @@ import path from "path";
 export async function setupVite(app: Express, server: Server) {
   // 动态导入 vite，避免在生产环境打包时引入
   const { createServer: createViteServer } = await import("vite");
-  const viteConfig = await import("../../vite.config");
 
   const serverOptions = {
     middlewareMode: true,
@@ -15,8 +14,8 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
+  // 直接在这里定义 vite 配置，不导入 vite.config.ts
   const vite = await createViteServer({
-    ...viteConfig.default,
     configFile: false,
     server: serverOptions,
     appType: "custom",
@@ -54,6 +53,7 @@ export function serveStatic(app: Express) {
     process.env.NODE_ENV === "development"
       ? path.resolve(import.meta.dirname, "../..", "dist", "public")
       : path.resolve(import.meta.dirname, "public");
+  
   if (!fs.existsSync(distPath)) {
     console.error(
       `Could not find the build directory: ${distPath}, make sure to build the client first`
